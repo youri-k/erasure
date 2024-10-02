@@ -9,7 +9,7 @@ public class Cell {
             super(capacity);
         }
 
-        public Cell minCell;
+        public Cell minCell = null;
     }
 
     public Attribute attribute;

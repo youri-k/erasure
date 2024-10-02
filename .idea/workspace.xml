@@ -5,18 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="56ad9024-4494-4150-81c3-eb1a1be76306" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/codeStyles/codeStyleConfig.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/encodings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/de/hpi/isg/Instatiator.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/de/hpi/isg/RelationalDependencyRules/Attribute.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/de/hpi/isg/RelationalDependencyRules/Cell.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/de/hpi/isg/RelationalDependencyRules/Rule.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/de/hpi/isg/Main.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/de/hpi/isg/Main.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/de/hpi/isg/RelationalDependencyRules/Cell.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/de/hpi/isg/RelationalDependencyRules/Cell.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -182,7 +173,7 @@
       <workItem from="1727731197915" duration="1353000" />
       <workItem from="1727787984006" duration="7876000" />
       <workItem from="1727819810571" duration="1501000" />
-      <workItem from="1727821325851" duration="3384000" />
+      <workItem from="1727821325851" duration="5882000" />
     </task>
     <servers />
   </component>
@@ -237,12 +228,12 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
           <url>file://$PROJECT_DIR$/src/main/java/de/hpi/isg/Main.java</url>
-          <line>443</line>
+          <line>442</line>
           <option name="timeStamp" value="85" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
           <url>file://$PROJECT_DIR$/src/main/java/de/hpi/isg/Main.java</url>
-          <line>441</line>
+          <line>440</line>
           <option name="timeStamp" value="87" />
         </line-breakpoint>
       </breakpoints>
