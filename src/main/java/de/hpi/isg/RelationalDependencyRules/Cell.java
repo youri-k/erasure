@@ -6,7 +6,7 @@ import java.util.Objects;
 public class Cell {
     public static class HyperEdge extends HashSet<Cell> {
         public HyperEdge(int capacity) {
-            super(capacity);
+            super(capacity, 1f);
         }
 
         public Cell minCell = null;

@@ -2,6 +2,7 @@ package de.hpi.isg;
 
 import java.sql.*;
 import java.util.*;
+
 import de.hpi.isg.RelationalDependencyRules.Cell;
 import de.hpi.isg.RelationalDependencyRules.Attribute;
 import de.hpi.isg.RelationalDependencyRules.Rule;
@@ -15,12 +16,13 @@ public class Instatiator {
     final ArrayList<Rule> EMPTY_LIST = new ArrayList<>(0);
     public final Statement statement;
     final String IT_SUFFIX = "_insertiontime";
+    final String BACKUP_SUFFIX = "_backup";
 
     public Instatiator(HashMap<Attribute, ArrayList<Rule>> attributeInHead, HashMap<Attribute, ArrayList<Rule>> attributeInTail, HashMap<String, String> tableName2keyCol) throws SQLException {
         this.attributeInHead = attributeInHead;
         this.attributeInTail = attributeInTail;
         this.tableName2keyCol = tableName2keyCol;
-        Connection c = DriverManager.getConnection("jdbc:postgresql://localhost:5432/obliviatortest", "postgres", "postgres");
+        Connection c = DriverManager.getConnection(ConfigParameter.connectionUrl + ConfigParameter.database, ConfigParameter.username, ConfigParameter.password);
 //        Connection c = DriverManager.getConnection("jdbc:postgresql://localhost:5432/tax", "postgres", "postgres");
         statement = c.createStatement();
     }
@@ -107,6 +109,7 @@ public class Instatiator {
         }
         return queries;
     }
+
     private ArrayList<String> ruleToColumnNames(Rule rule) {
         var names = new ArrayList<String>(rule.tail.size() + rule.tables.size() + 1);
         for (String table : rule.tables) {
@@ -138,5 +141,23 @@ public class Instatiator {
             throw new SQLException("Non-unique key!");
         }
         return cell;
+    }
+
+    public void setToNull(Cell cell) throws SQLException {
+        var q = "UPDATE " + cell.attribute.table + " SET " + cell.attribute.attribute + " = NULL WHERE " + tableName2keyCol.get(cell.attribute.table) + " = '" + cell.key + "'";
+        var i = statement.executeUpdate(q);
+
+        if (i != 1) {
+            throw new SQLException("More cells deleted than expected");
+        }
+    }
+
+    public void resetSchema() throws SQLException {
+        var tableName = tableName2keyCol.keySet().iterator().next();
+        var schemaName = tableName.split("\\.")[0];
+        var dropQuery = "DROP SCHEMA IF EXISTS " + schemaName + " CASCADE";
+        statement.execute(dropQuery);
+        var q = "SELECT clone_schema('" + schemaName + BACKUP_SUFFIX + "', '" + schemaName + "', 'DATA');";
+        statement.execute(q);
     }
 }
