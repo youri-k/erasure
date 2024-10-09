@@ -3,7 +3,7 @@ package de.hpi.isg.RelationalDependencyRules;
 import java.util.HashSet;
 import java.util.Objects;
 
-public class Cell {
+public class Cell implements Comparable<Cell> {
     public static class HyperEdge extends HashSet<Cell> {
         public HyperEdge(int capacity) {
             super(capacity, 1f);
@@ -33,6 +33,11 @@ public class Cell {
     @Override
     public String toString() {
         return attribute.toString() + "[" + key + "] => " + value;
+    }
+
+    @Override
+    public int compareTo(Cell cell) {
+        return Long.compare(insertionTime, cell.insertionTime);
     }
 
     @Override

@@ -15,6 +15,8 @@ public class ConfigParameter {
     static int numKeys = 10;
     static boolean batching = false;
     static boolean scheduling = false;
+    static int[] batchSizes = new int[]{numKeys};
+    static boolean isBatchSizeTime = false;
 
 
     public static void setDataset(String dataset) {

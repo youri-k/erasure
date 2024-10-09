@@ -10,4 +10,10 @@ public class Utils {
     final static long[] approximateCounts = new long[3];
     final static long[] optimalCounts = new long[3];
     final static long[] ilpCounts = new long[3];
+
+
+    // deletions, instantiations, tree height
+    final static long[] approximateBatchingCounts = new long[3];
+    final static long[] optimalBatchingCounts = new long[3];
+    final static long[] ilpBatchingCounts = new long[3];
 }

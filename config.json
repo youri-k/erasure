@@ -1,4 +1,6 @@
 {
-  "dataset": "tax",
-  "ruleFile": "rules_tax_easy.csv"
+  "dataset": "ex",
+  "ruleFile": "rules_ex_easy.csv",
+  "batching": true,
+  "batchSizes": [90, 180]
 }
