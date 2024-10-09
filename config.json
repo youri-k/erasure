@@ -1,3 +1,4 @@
 {
-  "dataset": "ex"
+  "dataset": "tax",
+  "ruleFile": "rules_tax_easy.csv"
 }
