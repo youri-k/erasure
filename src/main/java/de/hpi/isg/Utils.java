@@ -7,9 +7,9 @@ public class Utils {
     final static long[] ilpTimes = new long[5];
 
     // deletions, instantiations, tree height
-    final static long[] approximateCounts = new long[3];
-    final static long[] optimalCounts = new long[3];
-    final static long[] ilpCounts = new long[3];
+    final static long[] approximateCounts = new long[4];
+    final static long[] optimalCounts = new long[4];
+    final static long[] ilpCounts = new long[4];
 
 
     // deletions, instantiations, tree height

@@ -1,6 +1,7 @@
 {
   "dataset": "ex",
   "ruleFile": "rules_ex_easy.csv",
+  "numKeys": 11,
   "batching": true,
-  "batchSizes": [90, 180]
+  "batchSizes": [1, 90, 180]
 }

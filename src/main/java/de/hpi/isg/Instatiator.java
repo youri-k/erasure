@@ -7,6 +7,7 @@ import de.hpi.isg.RelationalDependencyRules.Cell;
 import de.hpi.isg.RelationalDependencyRules.Attribute;
 import de.hpi.isg.RelationalDependencyRules.Rule;
 import de.hpi.isg.RelationalDependencyRules.Cell.HyperEdge;
+import org.postgresql.util.PGobject;
 
 
 public class Instatiator {
@@ -17,12 +18,13 @@ public class Instatiator {
     public final Statement statement;
     final String IT_SUFFIX = "_insertiontime";
     final String BACKUP_SUFFIX = "_backup";
+    final Connection c;
 
     public Instatiator(HashMap<Attribute, ArrayList<Rule>> attributeInHead, HashMap<Attribute, ArrayList<Rule>> attributeInTail, HashMap<String, String> tableName2keyCol) throws SQLException {
         this.attributeInHead = attributeInHead;
         this.attributeInTail = attributeInTail;
         this.tableName2keyCol = tableName2keyCol;
-        Connection c = DriverManager.getConnection(ConfigParameter.connectionUrl + ConfigParameter.database, ConfigParameter.username, ConfigParameter.password);
+        c = DriverManager.getConnection(ConfigParameter.connectionUrl + ConfigParameter.database, ConfigParameter.username, ConfigParameter.password);
 //        Connection c = DriverManager.getConnection("jdbc:postgresql://localhost:5432/tax", "postgres", "postgres");
         statement = c.createStatement();
     }
@@ -159,5 +161,35 @@ public class Instatiator {
         statement.execute(dropQuery);
         var q = "SELECT clone_schema('" + schemaName + BACKUP_SUFFIX + "', '" + schemaName + "', 'DATA');";
         statement.execute(q);
+    }
+
+    public void resetValues(Collection<Cell> cells) throws SQLException {
+        for (var cell : cells) {
+            var stmt = c.prepareStatement("UPDATE " + cell.attribute.table + " SET " + cell.attribute.attribute + " = ? WHERE " + tableName2keyCol.get(cell.attribute.table) + " = '" + cell.key + "'");
+            if (cell.attribute.attribute.equals("payload")) {
+                PGobject jsonObject = new PGobject();
+                jsonObject.setType("json");
+                jsonObject.setValue(cell.value);
+                stmt.setObject(1, jsonObject);
+            } else {
+                try {
+                    var val = Long.parseLong(cell.value);
+                    stmt.setLong(1, val);
+                } catch (Exception e) {
+                    try {
+                        var val = Float.parseFloat(cell.value);
+                        stmt.setFloat(1, val);
+                    } catch (Exception e2) {
+                        stmt.setString(1, cell.value);
+                    }
+                }
+
+            }
+            var i = stmt.executeUpdate();
+            stmt.close();
+            if (i != 1) {
+                throw new SQLException("More cells deleted than expected");
+            }
+        }
     }
 }

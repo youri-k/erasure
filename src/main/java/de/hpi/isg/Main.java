@@ -1,5 +1,7 @@
 package de.hpi.isg;
 
+import de.hpi.isg.DataInsert.Twitter;
+import de.hpi.isg.DataInsert.SmartBench;
 import de.hpi.isg.RelationalDependencyRules.Rule;
 import de.hpi.isg.RelationalDependencyRules.Attribute;
 import de.hpi.isg.RelationalDependencyRules.Cell;
@@ -77,6 +79,12 @@ public class Main {
         String configFilePath = args.length > 0 ? args[0] : "config.json";
         parseConfigFile(Files.readString(Paths.get(configFilePath)));
 
+        if (false) {
+//            Twitter.parseTweets();
+//            SmartBench.convertTimestamps();
+            return;
+        }
+
         env = new GRBEnv();
         env.set(GRB.IntParam.OutputFlag, 0);
         env.set(GRB.IntParam.LogToConsole, 0);
@@ -92,6 +100,9 @@ public class Main {
 
         var instatiator = new Instatiator(attributeInHead, attributeInTail, tableName2keyCol);
 
+//        var testSet = new HashSet<Attribute>();
+//        testSet.add(new Attribute("socialgram.posts", "replies"));
+
         if (ConfigParameter.batching) {
             compareBatch(instatiator, allAttributes);
         } else if (ConfigParameter.scheduling) {
@@ -100,7 +111,7 @@ public class Main {
             iterateAttributes(instatiator, allAttributes);
         }
 
-        var exampleDelete = new Cell(new Attribute("socialgram.profile", "totalLikes"), "921");
+//        var exampleDelete = new Cell(new Attribute("socialgram.profile", "totalLikes"), "921");
 //        socialgram.profile totalLikes[1108] => 0
 //        var exampleDelete = new Cell(new Attribute("socialgram.profile", "avgQuotes"), "216");
 //        var exampleDelete = new Cell(new Attribute("socialgram.posts", "tweetid"), "951680840706048000");
@@ -183,10 +194,8 @@ public class Main {
         HashSet<Cell>[] deletionSets = new HashSet[3];
         for (var attr : attributes) {
             System.out.print(attr.toString() + ",");
-            instatiator.resetSchema();
             var keys = getKeys(instatiator, attr);
             for (var key : keys) {
-                instatiator.resetSchema();
                 var deletionCell = new Cell(attr, key);
                 instatiator.completeCell(deletionCell);
                 var instantiatedModel = new InstantiatedModel(deletionCell, instatiator);
@@ -197,26 +206,29 @@ public class Main {
                 // speed up experiments by only applying deletes once for optimal/ilp
                 assert deletionSets[0].size() == deletionSets[2].size();
                 var deletionTime = deleteCells(instatiator, deletionSets[2]);
+                instatiator.resetValues(deletionSets[2]);
                 Utils.optimalTimes[4] += deletionTime;
                 Utils.ilpTimes[4] += deletionTime;
                 if (deletionSets[0].size() == deletionSets[1].size()) {
                     Utils.approximateTimes[4] += deletionTime;
                 } else {
-                    instatiator.resetSchema();
                     Utils.approximateTimes[4] += deleteCells(instatiator, deletionSets[1]);
+                    instatiator.resetValues(deletionSets[1]);
                 }
             }
             writeOutput();
         }
-
     }
 
     private static void compareBatch(Instatiator instatiator, Set<Attribute> attributes) throws Exception {
-        instatiator.resetSchema();
-        var batch = new ArrayList<Cell>(ConfigParameter.numKeys * attributes.size());
+        var totalBatchSize = (ConfigParameter.numKeys * attributes.size()) - (ConfigParameter.numKeys * attributes.size()) % ConfigParameter.batchSizes[ConfigParameter.batchSizes.length - 1];
+        var batch = new ArrayList<Cell>(totalBatchSize);
         for (var attr : attributes) {
             var keys = getKeys(instatiator, attr);
             for (var key : keys) {
+                if (batch.size() == totalBatchSize) {
+                    break;
+                }
                 var deletionCell = new Cell(attr, key);
                 instatiator.completeCell(deletionCell);
                 batch.add(deletionCell);
@@ -249,7 +261,7 @@ public class Main {
                             var delTime = deletionCount.get(deletionSets[i].size());
                             if (delTime == null) {
                                 delTime = deleteCells(instatiator, deletionSets[i]);
-                                instatiator.resetSchema();
+                                instatiator.resetValues(deletionSets[i]);
                                 deletionCount.put(deletionSets[i].size(), delTime);
                             }
                             switch (i) {
@@ -275,12 +287,8 @@ public class Main {
 
     }
 
-    private static void writeBatchOutput() {
-
-    }
-
     private static void writeHeader() {
-        System.out.println("Attribute,optimalTime,optimalInstantiationTime,optimalModelTime,optimalOptimizationTime,optimalDeletionTime,approximateTime,approximateInstantiationTime,approximateModelTime,approximateOptimizationTime,approximateDeletionTime,ilpTime,ilpInstantiationTime,ilpModelTime,ilpOptimizationTime,ilpDeletionTime,optimalDeletes,optimalInstantiations,optimalHeight,approximateDeletes,approximateInstantiations,approximateHeight,ilpDeletes,ilpInstantiations,ilpHeight");
+        System.out.println("Attribute,optimalTime,optimalInstantiationTime,optimalModelTime,optimalOptimizationTime,optimalDeletionTime,approximateTime,approximateInstantiationTime,approximateModelTime,approximateOptimizationTime,approximateDeletionTime,ilpTime,ilpInstantiationTime,ilpModelTime,ilpOptimizationTime,ilpDeletionTime,optimalDeletes,optimalInstantiations,optimalHeight,optimalMemory,approximateDeletes,approximateInstantiations,approximateHeight,approximateMemory,ilpDeletes,ilpInstantiations,ilpHeight,ilpMemory");
     }
 
     private static String getTimeString(long time) {
@@ -330,15 +338,6 @@ public class Main {
         return keys;
     }
 
-    private static boolean containsParent(HyperEdge edge, HashSet<Cell> parents) {
-        for (var cell : edge) {
-            if (parents.contains(cell)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private static HashSet<Cell> optimalDelete(InstantiatedModel model, Cell deleted) {
         Utils.optimalCounts[1] += model.instantiationTime.size();
         Utils.optimalCounts[2] += model.treeLevels.size();
@@ -385,8 +384,36 @@ public class Main {
             }
         }
         Utils.optimalTimes[3] += System.nanoTime() - start;
+        if (ConfigParameter.measureMemory) {
+            Utils.optimalCounts[3] += measureOptimalMemory(model, deleted);
+        }
 
         return toDelete;
+    }
+
+    private static long measureOptimalMemory(InstantiatedModel model, Cell deleted) {
+        long size = 0;
+        LinkedList<Cell> cellsToVisit = new LinkedList<>();
+        HashSet<Cell> instantiatedCells = new HashSet<>();
+        cellsToVisit.add(deleted);
+        while (!cellsToVisit.isEmpty()) {
+            var curr = cellsToVisit.poll();
+            // per cell: 4 bytes for the table index, 4 bytes for the row index, 4 bytes insertionTime, 1 byte state (deleted) and 4 bytes cost
+            size += 4 + 4 + 4 + 1 + 4;
+            var edges = model.cell2Edge.get(curr);
+            if (edges != null) {
+                for (var edge : edges) {
+                    // 8 bytes per element in hyperedge + 8 bytes for pointer from head to edge + 4 bytes for the cheapest node
+                    size += edge.size() * 8L + 8L + 4L;
+                    for (var cell : edge) {
+                        if (instantiatedCells.add(cell)) {
+                            cellsToVisit.add(cell);
+                        }
+                    }
+                }
+            }
+        }
+        return size;
     }
 
     private static boolean areAllChildrenInitialized(ArrayList<HyperEdge> edges) {
@@ -488,21 +515,21 @@ public class Main {
         int maxId = 0;
         int edgeCounter = -1;
         HashMap<Cell, Integer> cell2Id = new HashMap<>();
+        HashMap<Cell, GRBVar> cell2Var = new HashMap<>();
         HashSet<Cell> instantiatedCells = new HashSet<>();
         HashSet<Cell> toDelete = new HashSet<>();
         Queue<Cell> cellsToVisit = new LinkedList<>();
         GRBModel grbModel = new GRBModel(env);
         GRBLinExpr obj = new GRBLinExpr();
-        grbModel.addVar(1, 1, 0, GRB.BINARY, "a0");
+        cell2Var.put(deleted, grbModel.addVar(1, 1, 0, GRB.BINARY, "a0"));
         cell2Id.put(deleted, maxId++);
         cellsToVisit.add(deleted);
         instantiatedCells.add(deleted);
 
         while (!cellsToVisit.isEmpty()) {
             var curr = cellsToVisit.poll();
-            int currId = cell2Id.get(curr);
-            grbModel.update();
-            GRBVar aj = grbModel.getVarByName("a" + currId);
+            var currId = cell2Id.get(curr);
+            var aj = cell2Var.get(curr);
             obj.addTerm(1, aj);
             Utils.ilpTimes[1] += model.instantiationTime.getOrDefault(curr, 0L);
 
@@ -521,10 +548,10 @@ public class Main {
                             tId = maxId;
                             cell2Id.put(cell, maxId++);
                             aCell = grbModel.addVar(0, 1, 0, GRB.BINARY, "a" + tId);
+                            cell2Var.put(cell, aCell);
                         } else {
                             tId = cell2Id.get(cell);
-                            grbModel.update();
-                            aCell = grbModel.getVarByName("a" + tId);
+                            aCell = cell2Var.get(cell); // grbModel.getVarByName("a" + tId);
                         }
 
                         var tji = grbModel.addVar(0, 1, 0, GRB.BINARY, "t" + edgeCounter + tId);
@@ -547,7 +574,6 @@ public class Main {
         Utils.ilpTimes[2] += stop - start;
 
         grbModel.setObjective(obj, GRB.MINIMIZE);
-        grbModel.update();
         grbModel.optimize();
 
         if (grbModel.get(GRB.IntAttr.Status) == 3) {
@@ -563,7 +589,35 @@ public class Main {
         Utils.ilpTimes[3] += System.nanoTime() - stop;
         Utils.ilpCounts[1] += cell2Id.size();
 
+        if (ConfigParameter.measureMemory) {
+            Utils.ilpCounts[3] += measureILPMemory(model, deleted);
+        }
         return toDelete;
+    }
+
+    private static long measureILPMemory(InstantiatedModel model, Cell deleted) {
+        long size = 0;
+        LinkedList<Cell> cellsToVisit = new LinkedList<>();
+        HashSet<Cell> instantiatedCells = new HashSet<>();
+        cellsToVisit.add(deleted);
+        while (!cellsToVisit.isEmpty()) {
+            var curr = cellsToVisit.poll();
+            // per cell: 4 bytes for the table index, 4 bytes for the row index, 4 bytes insertionTime, 1 byte decision variable aj, pointer for objective
+            size += 4 + 4 + 4 + 1 + 8;
+            var edges = model.cell2Edge.get(curr);
+            if (edges != null) {
+                for (var edge : edges) {
+                    // 1 byte decision variable bi, 1 byte decision variable hij, constr aj = hij, constr bi = hij, 1byte decision variable + constr tji = aj + constr SUM(tji) >= bi per element in hyperedge
+                    size += 1L + 1L + 16L + 16L + edge.size() * (1L + 16L + 8L) + 8L;
+                    for (var cell : edge) {
+                        if (instantiatedCells.add(cell)) {
+                            cellsToVisit.add(cell);
+                        }
+                    }
+                }
+            }
+        }
+        return size;
     }
 
     private static HashSet<Cell> batchedIlpApproach(InstantiatedModel model, ArrayList<Cell> deletedCells) throws GRBException {
@@ -574,6 +628,7 @@ public class Main {
         GRBModel grbModel = new GRBModel(env);
         GRBLinExpr obj = new GRBLinExpr();
         HashMap<Cell, Integer> cell2Id = new HashMap<>();
+        HashMap<Cell, GRBVar> cell2Var = new HashMap<>();
         int maxId = 0;
         int edgeCounter = -1;
 
@@ -584,15 +639,14 @@ public class Main {
             if (instantiatedCells.add(deleted)) {
                 int initialTId = maxId;
                 cell2Id.put(deleted, maxId++);
-                grbModel.addVar(1, 1, 0, GRB.BINARY, "a" + initialTId);
+                cell2Var.put(deleted, grbModel.addVar(1, 1, 0, GRB.BINARY, "a" + initialTId));
 
                 cellsToVisit.add(deleted);
                 while (!cellsToVisit.isEmpty()) {
                     var curr = cellsToVisit.poll();
 
                     int currId = cell2Id.get(curr);
-                    grbModel.update();
-                    GRBVar aj = grbModel.getVarByName("a" + currId);
+                    GRBVar aj = cell2Var.get(curr);
                     obj.addTerm(1, aj);
 
                     Utils.ilpTimes[1] += model.instantiationTime.getOrDefault(curr, 0L);
@@ -612,10 +666,10 @@ public class Main {
                                     tId = maxId;
                                     cell2Id.put(cell, maxId++);
                                     aCell = grbModel.addVar(0, 1, 0, GRB.BINARY, "a" + tId);
+                                    cell2Var.put(cell, aCell);
                                 } else {
                                     tId = cell2Id.get(cell);
-                                    grbModel.update();
-                                    aCell = grbModel.getVarByName("a" + tId);
+                                    aCell = cell2Var.get(cell);
                                 }
 
                                 var tji = grbModel.addVar(0, 1, 0, GRB.BINARY, "t" + edgeCounter + tId);
@@ -645,7 +699,6 @@ public class Main {
         Utils.ilpTimes[2] += stop - start;
 
         grbModel.setObjective(obj, GRB.MINIMIZE);
-        grbModel.update();
         grbModel.optimize();
 
         if (grbModel.get(GRB.IntAttr.Status) == 3) {
@@ -706,10 +759,35 @@ public class Main {
             count++;
         }
         Utils.approximateCounts[2] += model.treeLevels.size() - count;
+        if (ConfigParameter.measureMemory) {
+            Utils.approximateCounts[3] += measureApproximateMemory(model, deleted);
+        }
 
         return toDelete;
     }
 
+    private static long measureApproximateMemory(InstantiatedModel model, Cell deleted) {
+        long size = 0;
+        LinkedList<Cell> cellsToVisit = new LinkedList<>();
+        HashSet<Cell> instantiatedCells = new HashSet<>();
+        cellsToVisit.add(deleted);
+        while (!cellsToVisit.isEmpty()) {
+            var curr = cellsToVisit.poll();
+            // per cell: 4 bytes for the table index, 4 bytes for the row index, 4 bytes insertionTime, 1 byte state (deleted) and 4 bytes cost
+            size += 4 + 4 + 4 + 1;
+            var edges = model.cell2Edge.get(curr);
+            if (edges != null) {
+                for (var edge : edges) {
+                    // 8 bytes per element in hyperedge + 8 bytes for pointer from head to edge + 4 bytes for the cheapest node
+                    size += edge.size() * 8L + 8L + 4L;
+                    if (instantiatedCells.add(edge.minCell)) {
+                        cellsToVisit.add(edge.minCell);
+                    }
+                }
+            }
+        }
+        return size;
+    }
 
     private static HashSet<Cell> batchedApproximateDelete(InstantiatedModel model, ArrayList<Cell> deletedCells) throws Exception {
         var start = System.nanoTime();

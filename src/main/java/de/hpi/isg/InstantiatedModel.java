@@ -40,7 +40,7 @@ public class InstantiatedModel {
 
         for (var deleted : deletedCells) {
             // Cell already handled
-            if (instantiatedCells.contains(deleted)) {
+            if (!instantiatedCells.add(deleted)) {
                 continue;
             }
             HashSet<Cell> nextLevel = new HashSet<>();
