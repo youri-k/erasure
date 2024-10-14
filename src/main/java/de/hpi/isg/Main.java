@@ -722,6 +722,7 @@ public class Main {
         Queue<Cell> cellsToVisit = new LinkedList<>();
         cellsToVisit.add(deleted);
         instantiatedCells.add(deleted);
+//        Utils.approximateTimes[1] += model.instantiationTime.get(deleted);
 
         while (!cellsToVisit.isEmpty()) {
             var curr = cellsToVisit.poll();
@@ -731,9 +732,7 @@ public class Main {
                 for (var edge : edges) {
                     Cell minCell = null;
                     for (var cell : edge) {
-                        if (instantiatedCells.add(cell)) {
-                            Utils.approximateTimes[1] += model.instantiationTime.getOrDefault(curr, 0L);
-                        }
+                        instantiatedCells.add(cell);
                         if (minCell == null || model.cell2Edge.getOrDefault(cell, EMPTY_LIST).size() < model.cell2Edge.getOrDefault(minCell, EMPTY_LIST).size()) {
                             minCell = cell;
                         }
@@ -756,6 +755,9 @@ public class Main {
         Utils.approximateCounts[2] += model.treeLevels.size() - count;
         if (ConfigParameter.measureMemory) {
             Utils.approximateCounts[3] += measureApproximateMemory(model, deleted);
+        }
+        for (var cell : instantiatedCells) {
+            Utils.approximateTimes[1] += model.instantiationTime.getOrDefault(cell, 0L);
         }
 
         return toDelete;

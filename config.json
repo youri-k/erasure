@@ -1,6 +1,6 @@
 {
   "dataset": "ex",
-  "numKeys": 3,
+  "numKeys": 10,
   "batching": false,
   "batchSizes": [1, 90, 180]
 }
