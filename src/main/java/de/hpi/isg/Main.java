@@ -100,8 +100,8 @@ public class Main {
 
         var instatiator = new Instatiator(attributeInHead, attributeInTail, tableName2keyCol);
 
-//        var testSet = new HashSet<Attribute>();
-//        testSet.add(new Attribute("socialgram.posts", "replies"));
+        // var testSet = new HashSet<Attribute>();
+        // testSet.add(new Attribute("socialgram.profile", "pscore"));
 
         if (ConfigParameter.batching) {
             compareBatch(instatiator, allAttributes);
@@ -113,16 +113,18 @@ public class Main {
 
 //        var exampleDelete = new Cell(new Attribute("socialgram.profile", "totalLikes"), "921");
 //        socialgram.profile totalLikes[1108] => 0
-//        var exampleDelete = new Cell(new Attribute("socialgram.profile", "avgQuotes"), "216");
+//        var exampleDelete = new Cell(new Attribute("socialgram.profile", "totalLikes"), "10133");
 //        var exampleDelete = new Cell(new Attribute("socialgram.posts", "tweetid"), "951680840706048000");
 //        var exampleDelete = new Cell(new Attribute("tax.tax", "ChildExemp"), "415701");
 //        instatiator.resetSchema();
 //        instatiator.completeCell(exampleDelete);
 //        var instantiatedModel = new InstantiatedModel(exampleDelete, instatiator);
 //
-//        optimalDelete(instantiatedModel, exampleDelete);
+//        var result = optimalDelete(instantiatedModel, exampleDelete);
+//        var delTime = deleteCells(instatiator, result);
+//        instatiator.resetValues(result);
 //        ilpApproach(instantiatedModel, exampleDelete);
-//        approximateDelete(exampleDelete, instatiator);
+//        approximateDelete(instantiatedModel, exampleDelete);
     }
 
     private static void checkNonCyclicRules(HashSet<Attribute> allAttributes) {
@@ -181,14 +183,6 @@ public class Main {
         return result;
     }
 
-    private static long deleteCells(Instatiator instatiator, HashSet<Cell> toDelete) throws SQLException {
-        var delStart = System.nanoTime();
-        for (var cell : toDelete) {
-            instatiator.setToNull(cell);
-        }
-        return System.nanoTime() - delStart;
-    }
-
     private static void iterateAttributes(Instatiator instatiator, Set<Attribute> attributes) throws Exception {
         writeHeader();
         HashSet<Cell>[] deletionSets = new HashSet[3];
@@ -205,14 +199,14 @@ public class Main {
 
                 // speed up experiments by only applying deletes once for optimal/ilp
                 assert deletionSets[0].size() == deletionSets[2].size();
-                var deletionTime = deleteCells(instatiator, deletionSets[2]);
+                var deletionTime = instatiator.deleteCells(deletionSets[2]);
                 instatiator.resetValues(deletionSets[2]);
                 Utils.optimalTimes[4] += deletionTime;
                 Utils.ilpTimes[4] += deletionTime;
                 if (deletionSets[0].size() == deletionSets[1].size()) {
                     Utils.approximateTimes[4] += deletionTime;
                 } else {
-                    Utils.approximateTimes[4] += deleteCells(instatiator, deletionSets[1]);
+                    Utils.approximateTimes[4] += instatiator.deleteCells(deletionSets[1]);
                     instatiator.resetValues(deletionSets[1]);
                 }
             }
@@ -260,7 +254,7 @@ public class Main {
                         for (int i = 0; i < 3; i++) {
                             var delTime = deletionCount.get(deletionSets[i].size());
                             if (delTime == null) {
-                                delTime = deleteCells(instatiator, deletionSets[i]);
+                                delTime = instatiator.deleteCells(deletionSets[i]);
                                 instatiator.resetValues(deletionSets[i]);
                                 deletionCount.put(deletionSets[i].size(), delTime);
                             }
@@ -731,14 +725,15 @@ public class Main {
 
         while (!cellsToVisit.isEmpty()) {
             var curr = cellsToVisit.poll();
-            Utils.approximateTimes[1] += model.instantiationTime.getOrDefault(curr, 0L);
 
             var edges = model.cell2Edge.get(curr);
             if (edges != null) {
                 for (var edge : edges) {
                     Cell minCell = null;
                     for (var cell : edge) {
-                        instantiatedCells.add(cell);
+                        if (instantiatedCells.add(cell)) {
+                            Utils.approximateTimes[1] += model.instantiationTime.getOrDefault(curr, 0L);
+                        }
                         if (minCell == null || model.cell2Edge.getOrDefault(cell, EMPTY_LIST).size() < model.cell2Edge.getOrDefault(minCell, EMPTY_LIST).size()) {
                             minCell = cell;
                         }

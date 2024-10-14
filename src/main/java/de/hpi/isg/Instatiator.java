@@ -25,6 +25,7 @@ public class Instatiator {
         this.attributeInTail = attributeInTail;
         this.tableName2keyCol = tableName2keyCol;
         c = DriverManager.getConnection(ConfigParameter.connectionUrl + ConfigParameter.database, ConfigParameter.username, ConfigParameter.password);
+        c.setAutoCommit(false);
 //        Connection c = DriverManager.getConnection("jdbc:postgresql://localhost:5432/tax", "postgres", "postgres");
         statement = c.createStatement();
     }
@@ -145,7 +146,16 @@ public class Instatiator {
         return cell;
     }
 
-    public void setToNull(Cell cell) throws SQLException {
+    public long deleteCells(HashSet<Cell> toDelete) throws SQLException {
+        var delStart = System.nanoTime();
+        for (var cell : toDelete) {
+            setToNull(cell);
+        }
+        c.commit();
+        return System.nanoTime() - delStart;
+    }
+
+    private void setToNull(Cell cell) throws SQLException {
         var q = "UPDATE " + cell.attribute.table + " SET " + cell.attribute.attribute + " = NULL WHERE " + tableName2keyCol.get(cell.attribute.table) + " = '" + cell.key + "'";
         var i = statement.executeUpdate(q);
 
@@ -161,6 +171,7 @@ public class Instatiator {
         statement.execute(dropQuery);
         var q = "SELECT clone_schema('" + schemaName + BACKUP_SUFFIX + "', '" + schemaName + "', 'DATA');";
         statement.execute(q);
+        c.commit();
     }
 
     public void resetValues(Collection<Cell> cells) throws SQLException {
@@ -191,5 +202,6 @@ public class Instatiator {
                 throw new SQLException("More cells deleted than expected");
             }
         }
+        c.commit();
     }
 }
