@@ -45,7 +45,7 @@ public class Instatiator {
         }
     }
 
-    private ArrayList<HyperEdge> resultSetToCellList(Rule rule, Cell start, ResultSet resultSet, long sourceInsertionTime) throws SQLException {
+    public ArrayList<HyperEdge> resultSetToCellList(Rule rule, Cell start, ResultSet resultSet, long sourceInsertionTime) throws SQLException {
         var result = new ArrayList<HyperEdge>();
         while (resultSet.next()) {
             HashMap<String, String> table2Key = new HashMap<>(rule.tables.size(), 1f);
@@ -88,7 +88,7 @@ public class Instatiator {
         return result;
     }
 
-    private ResultSet queryRule(Rule rule, Cell identifier, long sourceInsertionTime) throws SQLException {
+    public ResultSet queryRule(Rule rule, Cell identifier, long sourceInsertionTime) throws SQLException {
         ArrayList<String> tableStrings = new ArrayList<>(rule.tables.size());
         ArrayList<String> itJoinStrings = new ArrayList<>(rule.tables.size());
         for (var table : rule.tables) {
@@ -203,5 +203,13 @@ public class Instatiator {
             }
         }
         c.commit();
+    }
+
+    public long earliestTimestamp() throws SQLException {
+        var attribute = attributeInHead.keySet().iterator().next();
+        var q = "SELECT MIN(" + attribute.attribute + ") FROM " + attribute.table + IT_SUFFIX + ";";
+        var rs = statement.executeQuery(q);
+        rs.next();
+        return rs.getLong(1);
     }
 }

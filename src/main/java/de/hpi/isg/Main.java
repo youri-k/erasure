@@ -100,8 +100,14 @@ public class Main {
 
         var instatiator = new Instatiator(attributeInHead, attributeInTail, tableName2keyCol);
 
-        // var testSet = new HashSet<Attribute>();
+        var testSet = new HashSet<Attribute>();
         // testSet.add(new Attribute("socialgram.profile", "pscore"));
+        testSet.add(new Attribute("tax.tax", "ChildExemp"));
+
+        if (false) {
+            AverageDependence.averageDependence(allAttributes, rules, attributeInHead, attributeInTail, tableName2keyCol);
+            return;
+        }
 
         if (ConfigParameter.batching) {
             compareBatch(instatiator, allAttributes);
@@ -215,62 +221,61 @@ public class Main {
     }
 
     private static void compareBatch(Instatiator instatiator, Set<Attribute> attributes) throws Exception {
-        var totalBatchSize = (ConfigParameter.numKeys * attributes.size()) - (ConfigParameter.numKeys * attributes.size()) % ConfigParameter.batchSizes[ConfigParameter.batchSizes.length - 1];
-        var batch = new ArrayList<Cell>(totalBatchSize);
-        for (var attr : attributes) {
-            var keys = getKeys(instatiator, attr);
-            for (var key : keys) {
-                if (batch.size() == totalBatchSize) {
-                    break;
-                }
-                var deletionCell = new Cell(attr, key);
-                instatiator.completeCell(deletionCell);
-                batch.add(deletionCell);
-            }
-        }
-
-        Collections.sort(batch);
-
         HashSet<Cell>[] deletionSets = new HashSet[3];
+        var totalBatchSize = (ConfigParameter.numKeys * attributes.size()) - (ConfigParameter.numKeys * attributes.size()) % ConfigParameter.batchSizes[ConfigParameter.batchSizes.length - 1];
+        var batch = new ArrayList<Cell>(ConfigParameter.numKeys * attributes.size());
 
-        for (var batchSize : ConfigParameter.batchSizes) {
-            if (ConfigParameter.isBatchSizeTime) {
-                // TODO
-            } else {
+        if (ConfigParameter.isBatchSizeTime) {
+            var minTs = instatiator.earliestTimestamp();
+            var maxTs = ConfigParameter.batchSizes[0];
+
+            for (var attr : attributes) {
+                var keys = getKeysInTime(instatiator, attr, minTs, minTs + maxTs);
+                for (var key : keys) {
+                    var deletionCell = new Cell(attr, key);
+                    instatiator.completeCell(deletionCell);
+                    batch.add(deletionCell);
+                }
+            }
+
+            Collections.sort(batch);
+
+            for (int i = 1; i < ConfigParameter.batchSizes.length; i++) {
+                var currTs = minTs;
+                var batchSize = ConfigParameter.batchSizes[i];
+                ArrayList<Cell> subBatch = new ArrayList<>();
+
+                for (Cell cell : batch) {
+                    if (cell.insertionTime - currTs > batchSize) {
+                        processBatch(instatiator, deletionSets, subBatch);
+                        currTs += batchSize;
+                    }
+                    subBatch.add(cell);
+                }
+                System.out.print(batchSize + ",");
+                writeOutput();
+            }
+        } else {
+            for (var attr : attributes) {
+                var keys = getKeys(instatiator, attr);
+                for (var key : keys) {
+                    if (batch.size() == totalBatchSize) {
+                        break;
+                    }
+                    var deletionCell = new Cell(attr, key);
+                    instatiator.completeCell(deletionCell);
+                    batch.add(deletionCell);
+                }
+            }
+
+            Collections.sort(batch);
+
+            for (var batchSize : ConfigParameter.batchSizes) {
                 ArrayList<Cell> subBatch = new ArrayList<>(batchSize);
                 for (int rowIdx = 0; rowIdx < batch.size(); rowIdx++) {
                     subBatch.add(batch.get(rowIdx));
                     if ((rowIdx + 1) % batchSize == 0) {
-                        var model = new InstantiatedModel(subBatch, instatiator);
-
-                        deletionSets[0] = batchedOptimalDelete(model, subBatch);
-                        Utils.optimalCounts[0] += deletionSets[0].size();
-                        deletionSets[1] = batchedApproximateDelete(model, subBatch);
-                        Utils.approximateCounts[0] += deletionSets[1].size();
-                        deletionSets[2] = batchedIlpApproach(model, subBatch);
-                        Utils.ilpCounts[0] += deletionSets[2].size();
-
-                        HashMap<Integer, Long> deletionCount = new HashMap<>(3, 1.0f);
-                        for (int i = 0; i < 3; i++) {
-                            var delTime = deletionCount.get(deletionSets[i].size());
-                            if (delTime == null) {
-                                delTime = instatiator.deleteCells(deletionSets[i]);
-                                instatiator.resetValues(deletionSets[i]);
-                                deletionCount.put(deletionSets[i].size(), delTime);
-                            }
-                            switch (i) {
-                                case 0:
-                                    Utils.optimalTimes[4] += delTime;
-                                    break;
-                                case 1:
-                                    Utils.approximateTimes[4] += delTime;
-                                    break;
-                                case 2:
-                                    Utils.ilpTimes[4] += delTime;
-                                    break;
-                            }
-                        }
-                        subBatch.clear();
+                        processBatch(instatiator, deletionSets, subBatch);
                     }
                 }
                 System.out.print(batchSize + ",");
@@ -279,6 +284,48 @@ public class Main {
         }
 
 
+    }
+
+    private static void processBatch(Instatiator instatiator, HashSet<Cell>[] deletionSets, ArrayList<Cell> subBatch) throws Exception {
+        var model = new InstantiatedModel(subBatch, instatiator);
+
+        deletionSets[0] = batchedOptimalDelete(model, subBatch);
+        Utils.optimalCounts[0] += deletionSets[0].size();
+        deletionSets[1] = batchedApproximateDelete(model, subBatch);
+        Utils.approximateCounts[0] += deletionSets[1].size();
+        deletionSets[2] = batchedIlpApproach(model, subBatch);
+        Utils.ilpCounts[0] += deletionSets[2].size();
+
+        HashMap<Integer, Long> deletionCount = new HashMap<>(3, 1.0f);
+        for (int i = 0; i < 3; i++) {
+            var delTime = deletionCount.get(deletionSets[i].size());
+            if (delTime == null) {
+                delTime = instatiator.deleteCells(deletionSets[i]);
+                instatiator.resetValues(deletionSets[i]);
+                deletionCount.put(deletionSets[i].size(), delTime);
+            }
+            switch (i) {
+                case 0:
+                    Utils.optimalTimes[4] += delTime;
+                    break;
+                case 1:
+                    Utils.approximateTimes[4] += delTime;
+                    break;
+                case 2:
+                    Utils.ilpTimes[4] += delTime;
+                    break;
+            }
+        }
+        subBatch.clear();
+    }
+
+    private static ArrayList<String> getKeysInTime(Instatiator instatiator, Attribute attr, long minTs, long maxTs) throws SQLException {
+        ArrayList<String> keys = new ArrayList<>(ConfigParameter.numKeys);
+        var resultSet = instatiator.statement.executeQuery("SELECT a." + tableName2keyCol.get(attr.table) + " FROM " + attr.table + " a, " + attr.table + instatiator.IT_SUFFIX + " b WHERE insertionKey = " + tableName2keyCol.get(attr.table) + " AND b." + attr.attribute + " BETWEEN " + minTs + " AND " + maxTs + "ORDER BY RANDOM() LIMIT " + ConfigParameter.numKeys);
+        while (resultSet.next()) {
+            keys.add(resultSet.getString(1));
+        }
+        return keys;
     }
 
     private static void writeHeader() {
@@ -323,7 +370,7 @@ public class Main {
         Arrays.fill(Utils.ilpCounts, 0L);
     }
 
-    private static ArrayList<String> getKeys(Instatiator instatiator, Attribute attr) throws SQLException {
+    static ArrayList<String> getKeys(Instatiator instatiator, Attribute attr) throws SQLException {
         ArrayList<String> keys = new ArrayList<>(ConfigParameter.numKeys);
         var resultSet = instatiator.statement.executeQuery("SELECT " + tableName2keyCol.get(attr.table) + " FROM " + attr.table + " ORDER BY RANDOM() LIMIT " + ConfigParameter.numKeys);
         while (resultSet.next()) {
@@ -332,7 +379,7 @@ public class Main {
         return keys;
     }
 
-    private static HashSet<Cell> optimalDelete(InstantiatedModel model, Cell deleted) {
+    public static HashSet<Cell> optimalDelete(InstantiatedModel model, Cell deleted) {
         Utils.optimalCounts[1] += model.instantiationTime.size();
         Utils.optimalCounts[2] += model.treeLevels.size();
         Utils.optimalTimes[2] += model.modelConstructionTime;
@@ -715,13 +762,15 @@ public class Main {
     private static HashSet<Cell> approximateDelete(InstantiatedModel model, Cell deleted) {
         Cell lastCell = null;
         var start = System.nanoTime();
-        HashSet<Cell> instantiatedCells = new HashSet<>();
+        HashSet<Cell> edgesInstantiated = new HashSet<>();
         var toDelete = new HashSet<Cell>();
         toDelete.add(deleted);
+        HashSet<Cell> nodesInstantiated = new HashSet<>();
 
         Queue<Cell> cellsToVisit = new LinkedList<>();
         cellsToVisit.add(deleted);
-        instantiatedCells.add(deleted);
+        edgesInstantiated.add(deleted);
+        nodesInstantiated.add(deleted);
 //        Utils.approximateTimes[1] += model.instantiationTime.get(deleted);
 
         while (!cellsToVisit.isEmpty()) {
@@ -731,10 +780,15 @@ public class Main {
             if (edges != null) {
                 for (var edge : edges) {
                     Cell minCell = null;
+                    nodesInstantiated.addAll(edge);
                     for (var cell : edge) {
-                        instantiatedCells.add(cell);
+                        edgesInstantiated.add(cell);
+                        for (var grandChildren : model.cell2Edge.getOrDefault(cell, EMPTY_LIST)) {
+                            nodesInstantiated.addAll(grandChildren);
+                        }
                         if (minCell == null || model.cell2Edge.getOrDefault(cell, EMPTY_LIST).size() < model.cell2Edge.getOrDefault(minCell, EMPTY_LIST).size()) {
                             minCell = cell;
+                            edge.minCell = cell;
                         }
                     }
                     if (toDelete.add(minCell)) {
@@ -746,7 +800,7 @@ public class Main {
         }
 
         Utils.approximateTimes[2] += System.nanoTime() - start;
-        Utils.approximateCounts[1] += instantiatedCells.size();
+        Utils.approximateCounts[1] += nodesInstantiated.size();
         int count = 0;
         for (var level : model.treeLevels) {
             if (level.contains(lastCell)) break;
@@ -754,31 +808,70 @@ public class Main {
         }
         Utils.approximateCounts[2] += model.treeLevels.size() - count;
         if (ConfigParameter.measureMemory) {
-            Utils.approximateCounts[3] += measureApproximateMemory(model, deleted);
+            Utils.approximateCounts[3] += measureApproximateMemory(model, nodesInstantiated, edgesInstantiated);
         }
-        for (var cell : instantiatedCells) {
+        for (var cell : edgesInstantiated) {
             Utils.approximateTimes[1] += model.instantiationTime.getOrDefault(cell, 0L);
         }
 
         return toDelete;
     }
 
+    private static long measureApproximateMemory(InstantiatedModel model, HashSet<Cell> nodesInstantiated, HashSet<Cell> edgesInstantiated) {
+        long size = 0;
+
+        // per cell: 4 bytes for the table index, 4 bytes for the row index, 4 bytes insertionTime, 1 byte state (deleted) and 4 bytes cost
+        size += nodesInstantiated.size() * (4 + 4 + 4 + 1L);
+
+        for (var cell : edgesInstantiated) {
+            var edges = model.cell2Edge.getOrDefault(cell, EMPTY_LIST);
+            for (var edge : edges) {
+                size += edge.size() * 8L + 8L + 4L;
+            }
+        }
+        return size;
+    }
+
     private static long measureApproximateMemory(InstantiatedModel model, Cell deleted) {
         long size = 0;
         LinkedList<Cell> cellsToVisit = new LinkedList<>();
         HashSet<Cell> instantiatedCells = new HashSet<>();
+        HashSet<Cell> edgesCells = new HashSet<>();
+        instantiatedCells.add(deleted);
+        edgesCells.add(deleted);
         cellsToVisit.add(deleted);
+        // per cell: 4 bytes for the table index, 4 bytes for the row index, 4 bytes insertionTime, 1 byte state (deleted) and 4 bytes cost
+        size += 4 + 4 + 4 + 1;
+        if (model.cell2Edge.get(deleted) != null) {
+            for (var edge : model.cell2Edge.get(deleted)) {
+                // 8 bytes per element in hyperedge + 8 bytes for pointer from head to edge + 4 bytes for the cheapest node
+                size += edge.size() * 8L + 8L + 4L;
+                size += edge.size() * (4L + 4L + 4L + 1L);
+            }
+        }
+
         while (!cellsToVisit.isEmpty()) {
             var curr = cellsToVisit.poll();
-            // per cell: 4 bytes for the table index, 4 bytes for the row index, 4 bytes insertionTime, 1 byte state (deleted) and 4 bytes cost
-            size += 4 + 4 + 4 + 1;
             var edges = model.cell2Edge.get(curr);
             if (edges != null) {
                 for (var edge : edges) {
-                    // 8 bytes per element in hyperedge + 8 bytes for pointer from head to edge + 4 bytes for the cheapest node
-                    size += edge.size() * 8L + 8L + 4L;
-                    if (instantiatedCells.add(edge.minCell)) {
+                    if (edgesCells.add(edge.minCell)) {
                         cellsToVisit.add(edge.minCell);
+                    }
+                    for (var cell : edge) {
+                        var grandchildren = model.cell2Edge.get(cell);
+                        if (grandchildren != null) {
+                            for (var grandchild : grandchildren) {
+                                // 8 bytes per element in hyperedge + 8 bytes for pointer from head to edge + 4 bytes for the cheapest node
+                                size += grandchild.size() * 8L + 8L + 4L;
+                                for (var grandCell : grandchild) {
+                                    if (instantiatedCells.add(grandCell)) {
+                                        // per cell: 4 bytes for the table index, 4 bytes for the row index, 4 bytes insertionTime, 1 byte state (deleted) and 4 bytes cost
+                                        size += 4 + 4 + 4 + 1;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -794,7 +887,6 @@ public class Main {
             if (instantiatedCells.add(deleted)) {
                 Queue<Cell> cellsToVisit = new LinkedList<>();
                 cellsToVisit.add(deleted);
-                Utils.approximateTimes[1] += model.instantiationTime.getOrDefault(deleted, 0L);
 
                 while (!cellsToVisit.isEmpty()) {
                     var curr = cellsToVisit.poll();
@@ -805,7 +897,6 @@ public class Main {
                             Cell minCell = null;
                             for (var cell : edge) {
                                 instantiatedCells.add(cell);
-                                Utils.approximateTimes[1] += model.instantiationTime.getOrDefault(cell, 0L);
                                 if (minCell == null || model.cell2Edge.getOrDefault(cell, EMPTY_LIST).size() < model.cell2Edge.getOrDefault(minCell, EMPTY_LIST).size()) {
                                     minCell = cell;
                                 }
@@ -849,6 +940,10 @@ public class Main {
         }
         Utils.approximateTimes[2] += System.nanoTime() - start;
         Utils.approximateCounts[1] += instantiatedCells.size();
+
+        for (var cell : instantiatedCells) {
+            Utils.approximateTimes[1] += model.instantiationTime.getOrDefault(cell, 0L);
+        }
 
         return toDelete;
     }

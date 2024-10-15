@@ -12,7 +12,7 @@ public class InstantiatedModel {
     HashMap<Cell, HashSet<Cell>> cell2Parents = new HashMap<>();
     long modelConstructionTime = 0L;
 
-    private static boolean containsParent(Cell.HyperEdge edge, HashSet<Cell> parents) {
+    static boolean containsParent(Cell.HyperEdge edge, HashSet<Cell> parents) {
         for (var cell : edge) {
             if (parents.contains(cell)) {
                 return true;

@@ -1,6 +1,7 @@
 {
-  "dataset": "ex",
-  "numKeys": 10,
-  "batching": false,
-  "batchSizes": [1, 90, 180]
+  "dataset": "smart",
+  "numKeys": 13,
+  "batching": true,
+  "isBatchSizeTime": true,
+  "batchSizes": [43200000, 3600000, 10800000, 21600000]
 }
