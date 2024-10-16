@@ -206,7 +206,7 @@ public class Scheduling {
 
     public static void mixScheduleDemandExperiment(Instatiator instatiator) throws Exception {
         var random = new Random();
-        var rules = parseRules("/home/y/neu/erasure/derived_extended.csv");
+        var rules = parseRules(ConfigParameter.configPath + ConfigParameter.derivedFile);
         var start = 1640991600000L;
         var end = 1672527600000L;
         var gracePeriod = 60 * 60 * 1000;
@@ -220,7 +220,6 @@ public class Scheduling {
         var keys = instatiator.getKeys(rules.get(0).head);
         HashMap<String, ArrayList<Cell>> key2Cell = new HashMap<>();
         for (var rule : rules) {
-
             for (var key : keys) {
                 var dependentValues = new ArrayList<Cell>();
                 var cell = new Cell(rule.head, key);
