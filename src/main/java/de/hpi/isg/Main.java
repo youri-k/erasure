@@ -1,7 +1,5 @@
 package de.hpi.isg;
 
-import de.hpi.isg.DataInsert.Twitter;
-import de.hpi.isg.DataInsert.SmartBench;
 import de.hpi.isg.RelationalDependencyRules.Rule;
 import de.hpi.isg.RelationalDependencyRules.Attribute;
 import de.hpi.isg.RelationalDependencyRules.Cell;
@@ -109,10 +107,12 @@ public class Main {
             return;
         }
 
-        if (ConfigParameter.batching) {
+        if (ConfigParameter.batching && ConfigParameter.scheduling) {
+            Scheduling.mixScheduleDemandExperiment(instatiator);
+        } else if (ConfigParameter.batching) {
             compareBatch(instatiator, allAttributes);
         } else if (ConfigParameter.scheduling) {
-            // TODO
+            Scheduling.scheduleExperiment(instatiator);
         } else {
             iterateAttributes(instatiator, allAttributes);
         }
@@ -194,7 +194,7 @@ public class Main {
         HashSet<Cell>[] deletionSets = new HashSet[3];
         for (var attr : attributes) {
             System.out.print(attr.toString() + ",");
-            var keys = getKeys(instatiator, attr);
+            var keys = instatiator.getKeys(attr);
             for (var key : keys) {
                 var deletionCell = new Cell(attr, key);
                 instatiator.completeCell(deletionCell);
@@ -252,12 +252,15 @@ public class Main {
                     }
                     subBatch.add(cell);
                 }
+                if (!subBatch.isEmpty()) {
+                    processBatch(instatiator, deletionSets, subBatch);
+                }
                 System.out.print(batchSize + ",");
                 writeOutput();
             }
         } else {
             for (var attr : attributes) {
-                var keys = getKeys(instatiator, attr);
+                var keys = instatiator.getKeys(attr);
                 for (var key : keys) {
                     if (batch.size() == totalBatchSize) {
                         break;
@@ -370,15 +373,6 @@ public class Main {
         Arrays.fill(Utils.ilpCounts, 0L);
     }
 
-    static ArrayList<String> getKeys(Instatiator instatiator, Attribute attr) throws SQLException {
-        ArrayList<String> keys = new ArrayList<>(ConfigParameter.numKeys);
-        var resultSet = instatiator.statement.executeQuery("SELECT " + tableName2keyCol.get(attr.table) + " FROM " + attr.table + " ORDER BY RANDOM() LIMIT " + ConfigParameter.numKeys);
-        while (resultSet.next()) {
-            keys.add(resultSet.getString(1));
-        }
-        return keys;
-    }
-
     public static HashSet<Cell> optimalDelete(InstantiatedModel model, Cell deleted) {
         Utils.optimalCounts[1] += model.instantiationTime.size();
         Utils.optimalCounts[2] += model.treeLevels.size();
@@ -466,7 +460,7 @@ public class Main {
         return true;
     }
 
-    private static HashSet<Cell> batchedOptimalDelete(InstantiatedModel model, ArrayList<Cell> deletedCells) {
+    static HashSet<Cell> batchedOptimalDelete(InstantiatedModel model, ArrayList<Cell> deletedCells) {
         Utils.optimalCounts[1] += model.instantiationTime.size();
         Utils.optimalTimes[2] += model.modelConstructionTime;
 
@@ -661,7 +655,7 @@ public class Main {
         return size;
     }
 
-    private static HashSet<Cell> batchedIlpApproach(InstantiatedModel model, ArrayList<Cell> deletedCells) throws GRBException {
+    static HashSet<Cell> batchedIlpApproach(InstantiatedModel model, ArrayList<Cell> deletedCells) throws GRBException {
         Utils.ilpTimes[2] += model.modelConstructionTime;
         var start = System.nanoTime();
 
@@ -879,7 +873,7 @@ public class Main {
         return size;
     }
 
-    private static HashSet<Cell> batchedApproximateDelete(InstantiatedModel model, ArrayList<Cell> deletedCells) throws Exception {
+    static HashSet<Cell> batchedApproximateDelete(InstantiatedModel model, ArrayList<Cell> deletedCells) throws Exception {
         var start = System.nanoTime();
         HashSet<Cell> instantiatedCells = new HashSet<>();
 
@@ -968,7 +962,7 @@ public class Main {
         }
     }
 
-    private static Rule parseRule(CSVRecord record) throws Exception {
+    public static Rule parseRule(CSVRecord record) throws Exception {
         int keywordsFound = 0;
         Rule rule = new Rule();
         String headString = "";

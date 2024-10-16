@@ -16,7 +16,7 @@ public class AverageDependence {
         ArrayList<Cell> deletionCells = new ArrayList<>(ConfigParameter.numKeys * allAttributes.size());
         HashMap<Attribute, ArrayList<String>> attr2Keys = new HashMap<>();
         for (var attr : allAttributes) {
-            var keys = Main.getKeys(instantiator, attr);
+            var keys = instantiator.getKeys(attr);
             System.out.print(attr + ",");
             for (var key : keys) {
                 var deletionCell = new Cell(attr, key);

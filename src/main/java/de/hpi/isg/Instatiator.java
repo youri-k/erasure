@@ -26,7 +26,6 @@ public class Instatiator {
         this.tableName2keyCol = tableName2keyCol;
         c = DriverManager.getConnection(ConfigParameter.connectionUrl + ConfigParameter.database, ConfigParameter.username, ConfigParameter.password);
         c.setAutoCommit(false);
-//        Connection c = DriverManager.getConnection("jdbc:postgresql://localhost:5432/tax", "postgres", "postgres");
         statement = c.createStatement();
     }
 
@@ -211,5 +210,22 @@ public class Instatiator {
         var rs = statement.executeQuery(q);
         rs.next();
         return rs.getLong(1);
+    }
+
+    public long latestTimestamp() throws SQLException {
+        var attribute = attributeInHead.keySet().iterator().next();
+        var q = "SELECT MAX(" + attribute.attribute + ") FROM " + attribute.table + IT_SUFFIX + ";";
+        var rs = statement.executeQuery(q);
+        rs.next();
+        return rs.getLong(1);
+    }
+
+    public ArrayList<String> getKeys(Attribute attr) throws SQLException {
+        ArrayList<String> keys = new ArrayList<>(ConfigParameter.numKeys);
+        var resultSet = statement.executeQuery("SELECT " + tableName2keyCol.get(attr.table) + " FROM " + attr.table + " ORDER BY RANDOM() LIMIT " + ConfigParameter.numKeys);
+        while (resultSet.next()) {
+            keys.add(resultSet.getString(1));
+        }
+        return keys;
     }
 }
