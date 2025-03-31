@@ -15,9 +15,13 @@ public class ConfigParameter {
     static int numKeys = 10;
     static boolean batching = false;
     static boolean scheduling = false;
+    static boolean averageDependence = false;
     static int[] batchSizes = new int[]{numKeys};
     static boolean isBatchSizeTime = false;
     static boolean measureMemory = true;
+    static long startSchedule = 1;
+    static long endSchedule = 2;
+    static long baseFrequency = 1000;
 
 
     public static void setDataset(String dataset) {

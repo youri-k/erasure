@@ -30,7 +30,7 @@ public class AverageDependence {
 
         HashMap<Cell, HashMap<Rule, ArrayList<Cell.HyperEdge>>> cell2Rule2InstantiationCache = new HashMap<>();
 
-        System.out.println("Size,InstantiatedCells,DeletionCount");
+        System.out.println("Index,Size,InstantiatedCells,DeletionCount");
 
         int n = allRules.size();
         for (int i = 0; i < (1 << n); i++) {
@@ -47,10 +47,10 @@ public class AverageDependence {
                 var currModel = new InstantiatedModel(deleted, cachingInstantiator);
                 var toDelete = Main.optimalDelete(currModel, deleted);
                 instantiatedCells += currModel.instantiationTime.size() - 1;
-                deletedCells += toDelete.size();
+                deletedCells += toDelete.size() - 1;
             }
             cachingInstantiator.closeConnection();
-            System.out.println(i + "," + instantiatedCells + "," + deletedCells);
+            System.out.println(i + "," + currentRuleSet.size() + "," + instantiatedCells + "," + deletedCells);
         }
     }
 

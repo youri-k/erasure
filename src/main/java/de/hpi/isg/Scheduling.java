@@ -13,17 +13,7 @@ import java.util.*;
 import static de.hpi.isg.Main.*;
 
 public class Scheduling {
-    final static long baseFrequence = 24 * 3600000;
-
-    private static ArrayList<Rule> parseRules(String path) throws Exception {
-        ArrayList<Rule> rules = new ArrayList<>();
-        var parser = CSVFormat.DEFAULT.parse(Files.newBufferedReader(Paths.get(path)));
-        for (var record : parser) {
-            var rule = parseRule(record);
-            rules.add(rule);
-        }
-        return rules;
-    }
+    final static long baseFrequence = 24 * ConfigParameter.baseFrequency;//3600000;
 
     static class Pair {
         long first;
@@ -47,6 +37,9 @@ public class Scheduling {
     private static long maxOverlap(HashSet<Pair> deletionIntervals, HashSet<Pair> removedElems, long gracePeriod, long startTime, long maxTime) {
         ArrayList<Pair> applicablePairs = new ArrayList<>();
         for (var pair : deletionIntervals) {
+            if (pair.first > maxTime) {
+                break;
+            }
             if (pair.incoming && pair.first >= startTime && pair.first <= maxTime) {
                 applicablePairs.add(pair);
                 applicablePairs.add(new Pair(pair.first + gracePeriod, false));
@@ -101,50 +94,8 @@ public class Scheduling {
 
     private static long constructScheduleWithGraceMaxOverlap(ArrayList<Cell> dependentValues, long gracePeriod, long start, long end) {
         HashMap<Long, HashSet<Pair>> deletionSchedule = new HashMap<>();
-        HashSet<Pair> pairs = new HashSet<>();
+        HashSet<Pair> pairs = new LinkedHashSet<>();
         return constructScheduleWithGraceMaxOverlap(dependentValues, gracePeriod, start, end, pairs, deletionSchedule);
-    }
-
-
-    private static long constructScheduleWithGrace(ArrayList<Cell> dependentValues, long gracePeriod, long start, long end) {
-        int reconstructions = 0;
-        var curr = start;
-        var nextDelete = curr + baseFrequence;
-        var endDelTime = new ArrayList<Long>();
-        var startDelTime = new ArrayList<Long>();
-        var depPointer = 0;
-
-        for (var dep : dependentValues) {
-            startDelTime.add(dep.insertionTime);
-            endDelTime.add(dep.insertionTime + gracePeriod);
-        }
-
-        while (curr < end) {
-            if (depPointer < endDelTime.size() && endDelTime.get(depPointer) < nextDelete) {
-                curr = endDelTime.get(depPointer);
-                nextDelete = curr + baseFrequence;
-                reconstructions++;
-                while (depPointer < endDelTime.size() && startDelTime.get(depPointer) <= curr) {
-                    depPointer++;
-                }
-            } else {
-                curr = nextDelete;
-                nextDelete = curr + baseFrequence;
-                reconstructions++;
-            }
-        }
-        return reconstructions;
-    }
-
-    public static long noDeletions(ArrayList<Cell> dependentValues, long start, long end) {
-        int reconstructions = 0;
-        long curr = start;
-        var maxTime = dependentValues.get(dependentValues.size() - 1).insertionTime + 1;
-        while (curr < end) {
-            curr += baseFrequence;
-            reconstructions++;
-        }
-        return reconstructions;
     }
 
     public static long baseReconstructions(ArrayList<Cell> dependentValues, long start, long end) {
@@ -166,13 +117,9 @@ public class Scheduling {
     }
 
     public static void scheduleExperiment(Instatiator instatiator) throws Exception {
-        var rules = parseRules("/home/y/neu/erasure/derived_ex.csv");
-        var start = 1640991600000L;
-        var end = 1672527600000L;
-
-        for (var rule : rules) {
+        for (var rule : derivedData) {
             long[] reconstructions = new long[25];
-            var keys = instatiator.getKeys(rule.head);
+             var keys = instatiator.getKeys(rule.head);
 
             for (var key : keys) {
                 var dependentValues = new ArrayList<Cell>();
@@ -188,14 +135,11 @@ public class Scheduling {
                 }
                 Collections.sort(dependentValues);
 
-//                System.out.println(noDeletions(dependentValues, start, end));
-                reconstructions[0] += baseReconstructions(dependentValues, start, end);
+                reconstructions[0] += baseReconstructions(dependentValues, ConfigParameter.startSchedule, ConfigParameter.endSchedule);
                 for (int i = 0; i < 24; i++) {
-                    // System.out.println(i + "," + constructScheduleWithGrace(dependentValues, i * 3600000L, start, end));
-                    reconstructions[i + 1] += constructScheduleWithGraceMaxOverlap(dependentValues, i * 3600000L, start, end);
+                    // reconstructions[i + 1] += constructScheduleWithGraceMaxOverlap(dependentValues, i * 3600000L, start, end);
+                    reconstructions[i + 1] += constructScheduleWithGraceMaxOverlap(dependentValues, i * ConfigParameter.baseFrequency, ConfigParameter.startSchedule, ConfigParameter.endSchedule);
                 }
-//                System.out.println(8760 + "," + constructScheduleWithGrace(dependentValues, 8760L * 3600000, start, end));
-//                System.out.println(8760 + "," + constructScheduleWithGraceMaxOverlap(dependentValues, 8760L * 3600000L, start, end));
             }
             System.out.println("base," + reconstructions[0]);
             for (int i = 1; i < reconstructions.length; i++) {
@@ -206,10 +150,9 @@ public class Scheduling {
 
     public static void mixScheduleDemandExperiment(Instatiator instatiator) throws Exception {
         var random = new Random();
-        var rules = parseRules(ConfigParameter.configPath + ConfigParameter.derivedFile);
-        var start = 1640991600000L;
-        var end = 1672527600000L;
-        var gracePeriod = 60 * 60 * 1000;
+        var start = ConfigParameter.startSchedule;
+        var end = ConfigParameter.endSchedule;
+        var gracePeriod = ConfigParameter.baseFrequency;
         var reconstructions = 0L;
         var deletedCells = 0L;
 
@@ -217,9 +160,9 @@ public class Scheduling {
         HashMap<Cell, Long> randomDeletionTime = new HashMap<>();
         var retentionAwareInstantiator = new RetentionAwareInstantiator(instatiator.attributeInHead, instatiator.attributeInTail, instatiator.tableName2keyCol);
 
-        var keys = instatiator.getKeys(rules.get(0).head);
+        var keys = instatiator.getKeys(derivedData.get(0).head);
         HashMap<String, ArrayList<Cell>> key2Cell = new HashMap<>();
-        for (var rule : rules) {
+        for (var rule : derivedData) {
             for (var key : keys) {
                 var dependentValues = new ArrayList<Cell>();
                 var cell = new Cell(rule.head, key);
@@ -231,7 +174,8 @@ public class Scheduling {
                         for (var child : edge) {
                             instatiator.completeCell(child);
                             // delete before it "expires"
-                            var delTime = (random.nextInt((int) ((child.insertionTime - start) / 1000))) * 1000L;
+//                             var delTime = (random.nextInt((int) ((child.insertionTime - start) / 1000))) * 1000L;
+                            var delTime = random.nextInt((int) (child.insertionTime - start));
                             randomDeletionTime.put(child, start + delTime);
                             dependentValues.add(child);
                         }
@@ -242,7 +186,7 @@ public class Scheduling {
             }
         }
 
-        for (int retentionDrivenShare = 0; retentionDrivenShare <= ConfigParameter.numKeys; retentionDrivenShare += (ConfigParameter.numKeys / 10) ) {
+        for (int retentionDrivenShare = 0; retentionDrivenShare <= ConfigParameter.numKeys; retentionDrivenShare += (ConfigParameter.numKeys / 10)) {
             var retentionKeys = new ArrayList<String>(retentionDrivenShare);
             var demandKeys = new ArrayList<String>(ConfigParameter.numKeys - retentionDrivenShare);
 
@@ -254,7 +198,7 @@ public class Scheduling {
                 demandKeys.add(keys.get(i));
             }
 
-            HashSet<Pair> pairs = new HashSet<>();
+            HashSet<Pair> pairs = new LinkedHashSet<>();
             HashMap<Long, HashSet<Pair>> deletionSchedule = new HashMap<>();
             HashSet<Cell> retentionKeyCellSet = new HashSet<>();
             var retentionCells = new ArrayList<Cell>();
@@ -311,8 +255,8 @@ public class Scheduling {
                     // process retention driven erasures
                     curr = currRetentionTime;
                     if (curr - batchStart >= gracePeriod) {
-                        var model = new InstantiatedModel(batch, instatiator);
-                        deletedCells += batchedApproximateDelete(model, batch).size();
+                        var model = new InstantiatedModel(batch, retentionAwareInstantiator);
+                        deletedCells += batchedOptimalDelete(model, batch).size();
                         batch.clear();
                         batchStart = curr;
                     }
@@ -329,7 +273,7 @@ public class Scheduling {
                     curr = currDemandTime;
                     if (curr - batchStart >= gracePeriod) {
                         var model = new InstantiatedModel(batch, instatiator);
-                        deletedCells += batchedApproximateDelete(model, batch).size();
+                        deletedCells += batchedOptimalDelete(model, batch).size();
                         batch.clear();
                         batchStart = curr;
                     }

@@ -1,8 +1,11 @@
 {
   "dataset": "ex",
-  "batching": true,
+  "batching": false,
   "scheduling": false,
-  "numKeys": 6,
+  "numKeys": 10,
   "isBatchSizeTime": true,
-  "batchSizes": [43200000, 3600000, 10800000, 21600000]
+  "batchSizes": [43200000, 3600000, 10800000, 21600000],
+  "startSchedule": 1510095600000,
+  "endSchedule": 1510181700000,
+  "baseFrequency": 137500
 }

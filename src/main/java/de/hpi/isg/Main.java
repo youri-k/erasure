@@ -16,6 +16,8 @@ import java.util.*;
 
 public class Main {
     final static ArrayList<Rule> rules = new ArrayList<>();
+    final static ArrayList<Rule> derivedData = new ArrayList<>();
+    final static HashSet<Attribute> derivedAttributes = new HashSet<>();
     final static HashMap<Attribute, ArrayList<Rule>> attributeInHead = new HashMap<>();
     final static HashMap<Attribute, ArrayList<Rule>> attributeInTail = new HashMap<>();
     final static HashMap<String, String> tableName2keyCol = new HashMap<>();
@@ -37,6 +39,9 @@ public class Main {
         if (root.has("schemaFile")) {
             ConfigParameter.schemaFile = root.getString("schemaFile");
         }
+        if (root.has("derivedFile")) {
+            ConfigParameter.derivedFile = root.getString("derivedFile");
+        }
         if (root.has("resultFile")) {
             ConfigParameter.resultFile = root.getString("resultFile");
         }
@@ -45,6 +50,9 @@ public class Main {
         }
         if (root.has("scheduling")) {
             ConfigParameter.scheduling = root.getBoolean("scheduling");
+        }
+        if (root.has("averageDependence")) {
+            ConfigParameter.averageDependence = root.getBoolean("averageDependence");
         }
         if (root.has("numKeys")) {
             ConfigParameter.numKeys = root.getInt("numKeys");
@@ -71,17 +79,20 @@ public class Main {
         if (root.has("password")) {
             ConfigParameter.password = root.getString("password");
         }
+        if (root.has("startSchedule")) {
+            ConfigParameter.startSchedule = root.getLong("startSchedule");
+        }
+        if (root.has("endSchedule")) {
+            ConfigParameter.endSchedule = root.getLong("endSchedule");
+        }
+        if (root.has("baseFrequency")) {
+            ConfigParameter.baseFrequency = root.getLong("baseFrequency");
+        }
     }
 
     public static void main(String[] args) throws Exception {
         String configFilePath = args.length > 0 ? args[0] : "config.json";
         parseConfigFile(Files.readString(Paths.get(configFilePath)));
-
-        if (false) {
-//            Twitter.parseTweets();
-//            SmartBench.convertTimestamps();
-            return;
-        }
 
         env = new GRBEnv();
         env.set(GRB.IntParam.OutputFlag, 0);
@@ -89,48 +100,29 @@ public class Main {
 
         parseRules();
         parseSchema();
+        parseDerivedData();
 
-        var allAttributes = new HashSet<Attribute>();
-        allAttributes.addAll(attributeInTail.keySet());
-        allAttributes.addAll(attributeInHead.keySet());
+        var baseAttributes = new HashSet<Attribute>();
+        baseAttributes.addAll(attributeInTail.keySet());
+        baseAttributes.addAll(attributeInHead.keySet());
+        baseAttributes.removeAll(derivedAttributes);
 
-        checkNonCyclicRules(allAttributes);
+        checkNonCyclicRules(baseAttributes);
 
         var instatiator = new Instatiator(attributeInHead, attributeInTail, tableName2keyCol);
 
-        var testSet = new HashSet<Attribute>();
-        // testSet.add(new Attribute("socialgram.profile", "pscore"));
-        testSet.add(new Attribute("tax.tax", "ChildExemp"));
-
-        if (false) {
-            AverageDependence.averageDependence(allAttributes, rules, attributeInHead, attributeInTail, tableName2keyCol);
-            return;
-        }
-
-        if (ConfigParameter.batching && ConfigParameter.scheduling) {
+        // switch between experiments
+        if (ConfigParameter.averageDependence) {
+            AverageDependence.averageDependence(baseAttributes, rules, attributeInHead, attributeInTail, tableName2keyCol);
+        } else if (ConfigParameter.batching && ConfigParameter.scheduling) {
             Scheduling.mixScheduleDemandExperiment(instatiator);
         } else if (ConfigParameter.batching) {
-            compareBatch(instatiator, allAttributes);
+            compareBatch(instatiator, baseAttributes);
         } else if (ConfigParameter.scheduling) {
             Scheduling.scheduleExperiment(instatiator);
         } else {
-            iterateAttributes(instatiator, allAttributes);
+            iterateAttributes(instatiator, baseAttributes);
         }
-
-//        var exampleDelete = new Cell(new Attribute("socialgram.profile", "totalLikes"), "921");
-//        socialgram.profile totalLikes[1108] => 0
-//        var exampleDelete = new Cell(new Attribute("socialgram.profile", "totalLikes"), "10133");
-//        var exampleDelete = new Cell(new Attribute("socialgram.posts", "tweetid"), "951680840706048000");
-//        var exampleDelete = new Cell(new Attribute("tax.tax", "ChildExemp"), "415701");
-//        instatiator.resetSchema();
-//        instatiator.completeCell(exampleDelete);
-//        var instantiatedModel = new InstantiatedModel(exampleDelete, instatiator);
-//
-//        var result = optimalDelete(instantiatedModel, exampleDelete);
-//        var delTime = deleteCells(instatiator, result);
-//        instatiator.resetValues(result);
-//        ilpApproach(instantiatedModel, exampleDelete);
-//        approximateDelete(instantiatedModel, exampleDelete);
     }
 
     private static void checkNonCyclicRules(HashSet<Attribute> allAttributes) {
@@ -185,14 +177,16 @@ public class Main {
                 result = ilpApproach(instantiatedModel, deleted);
                 break;
         }
-        countsArray[0] += result.size();
+        countsArray[0] += result.size() - 1;
         return result;
     }
 
     private static void iterateAttributes(Instatiator instatiator, Set<Attribute> attributes) throws Exception {
         writeHeader();
         HashSet<Cell>[] deletionSets = new HashSet[3];
+
         for (var attr : attributes) {
+            if (derivedAttributes.contains(attr)) continue;
             System.out.print(attr.toString() + ",");
             var keys = instatiator.getKeys(attr);
             for (var key : keys) {
@@ -226,11 +220,8 @@ public class Main {
         var batch = new ArrayList<Cell>(ConfigParameter.numKeys * attributes.size());
 
         if (ConfigParameter.isBatchSizeTime) {
-            var minTs = instatiator.earliestTimestamp();
-            var maxTs = ConfigParameter.batchSizes[0];
-
             for (var attr : attributes) {
-                var keys = getKeysInTime(instatiator, attr, minTs, minTs + maxTs);
+                var keys = instatiator.getKeysInTime(attr, ConfigParameter.startSchedule, ConfigParameter.endSchedule);
                 for (var key : keys) {
                     var deletionCell = new Cell(attr, key);
                     instatiator.completeCell(deletionCell);
@@ -241,7 +232,7 @@ public class Main {
             Collections.sort(batch);
 
             for (int i = 1; i < ConfigParameter.batchSizes.length; i++) {
-                var currTs = minTs;
+                var currTs = ConfigParameter.startSchedule;
                 var batchSize = ConfigParameter.batchSizes[i];
                 ArrayList<Cell> subBatch = new ArrayList<>();
 
@@ -285,19 +276,17 @@ public class Main {
                 writeOutput();
             }
         }
-
-
     }
 
     private static void processBatch(Instatiator instatiator, HashSet<Cell>[] deletionSets, ArrayList<Cell> subBatch) throws Exception {
         var model = new InstantiatedModel(subBatch, instatiator);
 
         deletionSets[0] = batchedOptimalDelete(model, subBatch);
-        Utils.optimalCounts[0] += deletionSets[0].size();
+        Utils.optimalCounts[0] += deletionSets[0].size() - subBatch.size();
         deletionSets[1] = batchedApproximateDelete(model, subBatch);
-        Utils.approximateCounts[0] += deletionSets[1].size();
+        Utils.approximateCounts[0] += deletionSets[1].size() - subBatch.size();
         deletionSets[2] = batchedIlpApproach(model, subBatch);
-        Utils.ilpCounts[0] += deletionSets[2].size();
+        Utils.ilpCounts[0] += deletionSets[2].size() - subBatch.size();
 
         HashMap<Integer, Long> deletionCount = new HashMap<>(3, 1.0f);
         for (int i = 0; i < 3; i++) {
@@ -322,15 +311,6 @@ public class Main {
         subBatch.clear();
     }
 
-    private static ArrayList<String> getKeysInTime(Instatiator instatiator, Attribute attr, long minTs, long maxTs) throws SQLException {
-        ArrayList<String> keys = new ArrayList<>(ConfigParameter.numKeys);
-        var resultSet = instatiator.statement.executeQuery("SELECT a." + tableName2keyCol.get(attr.table) + " FROM " + attr.table + " a, " + attr.table + instatiator.IT_SUFFIX + " b WHERE insertionKey = " + tableName2keyCol.get(attr.table) + " AND b." + attr.attribute + " BETWEEN " + minTs + " AND " + maxTs + "ORDER BY RANDOM() LIMIT " + ConfigParameter.numKeys);
-        while (resultSet.next()) {
-            keys.add(resultSet.getString(1));
-        }
-        return keys;
-    }
-
     private static void writeHeader() {
         System.out.println("Attribute,optimalTime,optimalInstantiationTime,optimalModelTime,optimalOptimizationTime,optimalDeletionTime,approximateTime,approximateInstantiationTime,approximateModelTime,approximateOptimizationTime,approximateDeletionTime,ilpTime,ilpInstantiationTime,ilpModelTime,ilpOptimizationTime,ilpDeletionTime,optimalDeletes,optimalInstantiations,optimalHeight,optimalMemory,approximateDeletes,approximateInstantiations,approximateHeight,approximateMemory,ilpDeletes,ilpInstantiations,ilpHeight,ilpMemory");
     }
@@ -344,7 +324,6 @@ public class Main {
         // subtract instantiation time from model construction
         Utils.optimalTimes[2] -= Utils.optimalTimes[1];
         // no model construction for approximate version
-//        Utils.approximateTimes[2] -= Utils.approximateTimes[1];
         Utils.ilpTimes[2] -= Utils.ilpTimes[1];
         for (var time : Utils.optimalTimes) {
             output.add(getTimeString(time));
@@ -374,7 +353,7 @@ public class Main {
     }
 
     public static HashSet<Cell> optimalDelete(InstantiatedModel model, Cell deleted) {
-        Utils.optimalCounts[1] += model.instantiationTime.size();
+        Utils.optimalCounts[1] += model.instantiationTime.size() - 1;
         Utils.optimalCounts[2] += model.treeLevels.size();
         Utils.optimalTimes[2] += model.modelConstructionTime;
 
@@ -461,7 +440,7 @@ public class Main {
     }
 
     static HashSet<Cell> batchedOptimalDelete(InstantiatedModel model, ArrayList<Cell> deletedCells) {
-        Utils.optimalCounts[1] += model.instantiationTime.size();
+        Utils.optimalCounts[1] += model.instantiationTime.size() - deletedCells.size();
         Utils.optimalTimes[2] += model.modelConstructionTime;
 
         var start = System.nanoTime();
@@ -622,7 +601,7 @@ public class Main {
         }
         grbModel.dispose();
         Utils.ilpTimes[3] += System.nanoTime() - stop;
-        Utils.ilpCounts[1] += cell2Id.size();
+        Utils.ilpCounts[1] += cell2Id.size() - 1;
 
         if (ConfigParameter.measureMemory) {
             Utils.ilpCounts[3] += measureILPMemory(model, deleted);
@@ -748,7 +727,7 @@ public class Main {
 
         grbModel.dispose();
         Utils.ilpTimes[3] += System.nanoTime() - stop;
-        Utils.ilpCounts[1] += cell2Id.size();
+        Utils.ilpCounts[1] += cell2Id.size() - deletedCells.size();
 
         return toDelete;
     }
@@ -765,7 +744,6 @@ public class Main {
         cellsToVisit.add(deleted);
         edgesInstantiated.add(deleted);
         nodesInstantiated.add(deleted);
-//        Utils.approximateTimes[1] += model.instantiationTime.get(deleted);
 
         while (!cellsToVisit.isEmpty()) {
             var curr = cellsToVisit.poll();
@@ -794,7 +772,7 @@ public class Main {
         }
 
         Utils.approximateTimes[2] += System.nanoTime() - start;
-        Utils.approximateCounts[1] += nodesInstantiated.size();
+        Utils.approximateCounts[1] += nodesInstantiated.size() - 1;
         int count = 0;
         for (var level : model.treeLevels) {
             if (level.contains(lastCell)) break;
@@ -821,53 +799,6 @@ public class Main {
             var edges = model.cell2Edge.getOrDefault(cell, EMPTY_LIST);
             for (var edge : edges) {
                 size += edge.size() * 8L + 8L + 4L;
-            }
-        }
-        return size;
-    }
-
-    private static long measureApproximateMemory(InstantiatedModel model, Cell deleted) {
-        long size = 0;
-        LinkedList<Cell> cellsToVisit = new LinkedList<>();
-        HashSet<Cell> instantiatedCells = new HashSet<>();
-        HashSet<Cell> edgesCells = new HashSet<>();
-        instantiatedCells.add(deleted);
-        edgesCells.add(deleted);
-        cellsToVisit.add(deleted);
-        // per cell: 4 bytes for the table index, 4 bytes for the row index, 4 bytes insertionTime, 1 byte state (deleted) and 4 bytes cost
-        size += 4 + 4 + 4 + 1;
-        if (model.cell2Edge.get(deleted) != null) {
-            for (var edge : model.cell2Edge.get(deleted)) {
-                // 8 bytes per element in hyperedge + 8 bytes for pointer from head to edge + 4 bytes for the cheapest node
-                size += edge.size() * 8L + 8L + 4L;
-                size += edge.size() * (4L + 4L + 4L + 1L);
-            }
-        }
-
-        while (!cellsToVisit.isEmpty()) {
-            var curr = cellsToVisit.poll();
-            var edges = model.cell2Edge.get(curr);
-            if (edges != null) {
-                for (var edge : edges) {
-                    if (edgesCells.add(edge.minCell)) {
-                        cellsToVisit.add(edge.minCell);
-                    }
-                    for (var cell : edge) {
-                        var grandchildren = model.cell2Edge.get(cell);
-                        if (grandchildren != null) {
-                            for (var grandchild : grandchildren) {
-                                // 8 bytes per element in hyperedge + 8 bytes for pointer from head to edge + 4 bytes for the cheapest node
-                                size += grandchild.size() * 8L + 8L + 4L;
-                                for (var grandCell : grandchild) {
-                                    if (instantiatedCells.add(grandCell)) {
-                                        // per cell: 4 bytes for the table index, 4 bytes for the row index, 4 bytes insertionTime, 1 byte state (deleted) and 4 bytes cost
-                                        size += 4 + 4 + 4 + 1;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
         return size;
@@ -933,7 +864,7 @@ public class Main {
             }
         }
         Utils.approximateTimes[2] += System.nanoTime() - start;
-        Utils.approximateCounts[1] += instantiatedCells.size();
+        Utils.approximateCounts[1] += instantiatedCells.size() - deletedCells.size();
 
         for (var cell : instantiatedCells) {
             Utils.approximateTimes[1] += model.instantiationTime.getOrDefault(cell, 0L);
@@ -949,7 +880,6 @@ public class Main {
         }
     }
 
-
     private static void parseRules() throws Exception {
         var parser = CSVFormat.DEFAULT.parse(Files.newBufferedReader(Paths.get(ConfigParameter.configPath, ConfigParameter.ruleFile)));
         for (var record : parser) {
@@ -959,6 +889,15 @@ public class Main {
             for (var tail : rule.tail) {
                 attributeInTail.computeIfAbsent(tail, attribute -> new ArrayList<>()).add(rule);
             }
+        }
+    }
+
+    private static void parseDerivedData() throws Exception {
+        var parser = CSVFormat.DEFAULT.parse(Files.newBufferedReader(Paths.get(ConfigParameter.configPath, ConfigParameter.derivedFile)));
+        for (var record : parser) {
+            var rule = parseRule(record);
+            derivedData.add(rule);
+            derivedAttributes.add(rule.head);
         }
     }
 
