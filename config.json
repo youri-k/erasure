@@ -1,9 +1,8 @@
 {
-  "dataset": "tax",
-  "derivedFile": "derived_tax_extended.csv",
+  "dataset": "ex",
   "batching": false,
   "scheduling": false,
-  "numKeys": 1,
+  "numKeys": 10,
   "isBatchSizeTime": true,
   "batchSizes": [43200000, 3600000, 10800000, 21600000],
   "startSchedule": 1510095600000,

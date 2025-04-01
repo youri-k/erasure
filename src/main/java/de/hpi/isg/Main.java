@@ -94,9 +94,9 @@ public class Main {
         String configFilePath = args.length > 0 ? args[0] : "config.json";
         parseConfigFile(Files.readString(Paths.get(configFilePath)));
 
-//        env = new GRBEnv();
-//        env.set(GRB.IntParam.OutputFlag, 0);
-//        env.set(GRB.IntParam.LogToConsole, 0);
+        env = new GRBEnv();
+        env.set(GRB.IntParam.OutputFlag, 0);
+        env.set(GRB.IntParam.LogToConsole, 0);
 
         parseRules();
         parseSchema();
@@ -195,14 +195,14 @@ public class Main {
                 var instantiatedModel = new InstantiatedModel(deletionCell, instatiator);
                 deletionSets[0] = runDeletionMethod(deletionCell, instantiatedModel, 0, Utils.optimalCounts);
                 deletionSets[1] = runDeletionMethod(deletionCell, instantiatedModel, 1, Utils.approximateCounts);
-//                deletionSets[2] = runDeletionMethod(deletionCell, instantiatedModel, 2, Utils.ilpCounts);
+                deletionSets[2] = runDeletionMethod(deletionCell, instantiatedModel, 2, Utils.ilpCounts);
 
                 // speed up experiments by only applying deletes once for optimal/ilp
-//                assert deletionSets[0].size() == deletionSets[2].size();
-                var deletionTime = instatiator.deleteCells(deletionSets[0]);
-                instatiator.resetValues(deletionSets[0]);
+                assert deletionSets[0].size() == deletionSets[2].size();
+                var deletionTime = instatiator.deleteCells(deletionSets[2]);
+                instatiator.resetValues(deletionSets[2]);
                 Utils.optimalTimes[4] += deletionTime;
-//                Utils.ilpTimes[4] += deletionTime;
+                Utils.ilpTimes[4] += deletionTime;
                 if (deletionSets[0].size() == deletionSets[1].size()) {
                     Utils.approximateTimes[4] += deletionTime;
                 } else {
@@ -354,11 +354,7 @@ public class Main {
 
     public static HashSet<Cell> optimalDelete(InstantiatedModel model, Cell deleted) {
         Utils.optimalCounts[1] += model.instantiationTime.size() - 1;
-        HashSet<HyperEdge> allHyperEdges = new HashSet<>();
-        for (var edges: model.cell2Edge.values()) {
-            allHyperEdges.addAll(edges);
-        }
-        Utils.optimalCounts[2] += allHyperEdges.size();
+        Utils.optimalCounts[2] += model.treeLevels.size();
         Utils.optimalTimes[2] += model.modelConstructionTime;
 
         var start = System.nanoTime();

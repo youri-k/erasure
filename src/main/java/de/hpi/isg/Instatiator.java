@@ -136,8 +136,7 @@ public class Instatiator {
         var rs = statement.executeQuery(a);
         if (rs.next()) {
             cell.value = rs.getString(1);
-            // TODO: change back
-            cell.insertionTime = 0L;
+            cell.insertionTime = rs.getLong(2);
         }
         if (rs.next()) {
             throw new SQLException("Non-unique key!");
