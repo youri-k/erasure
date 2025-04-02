@@ -178,6 +178,9 @@ public class Main {
                 break;
         }
         countsArray[0] += result.size() - 1;
+        if (result.size() == 1) {
+            countsArray[2]++;
+        }
         return result;
     }
 
@@ -354,7 +357,7 @@ public class Main {
 
     public static HashSet<Cell> optimalDelete(InstantiatedModel model, Cell deleted) {
         Utils.optimalCounts[1] += model.instantiationTime.size() - 1;
-        Utils.optimalCounts[2] += model.treeLevels.size();
+//        Utils.optimalCounts[2] += model.treeLevels.size();
         Utils.optimalTimes[2] += model.modelConstructionTime;
 
         var start = System.nanoTime();
@@ -778,7 +781,7 @@ public class Main {
             if (level.contains(lastCell)) break;
             count++;
         }
-        Utils.approximateCounts[2] += model.treeLevels.size() - count;
+//        Utils.approximateCounts[2] += model.treeLevels.size() - count;
         if (ConfigParameter.measureMemory) {
             Utils.approximateCounts[3] += measureApproximateMemory(model, nodesInstantiated, edgesInstantiated);
         }
