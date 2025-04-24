@@ -202,7 +202,7 @@ public class Main {
                 var deletionTime = instatiator.deleteCells(deletionSets[0]);
                 instatiator.resetValues(deletionSets[0]);
                 Utils.optimalTimes[4] += deletionTime;
-//                Utils.ilpTimes[4] += deletionTime;
+                Utils.ilpTimes[4] += deletionTime;
                 if (deletionSets[0].size() == deletionSets[1].size()) {
                     Utils.approximateTimes[4] += deletionTime;
                 } else {
